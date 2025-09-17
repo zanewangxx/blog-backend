@@ -1,14 +1,14 @@
 const blogsRouter = require('express').Router()
-const { request, response } = require('../app')
 const Blog = require('../models/blog')
+const { userExtractor } = require('../utils/middleware')
 
 // GET blogs
-blogsRouter.get('/', async (request, response) => {
-    const blogs = await Blog.find({})
+blogsRouter.get('/', userExtractor, async (request, response) => {
+    const blogs = await Blog.find({}).populate('user', {username: 1, name: 1, id: 1})
     response.json(blogs)
 })
 
-blogsRouter.get('/:id', async (request, response, next) => {
+blogsRouter.get('/:id', userExtractor, async (request, response, next) => {
     try{
     const blog = await Blog.findById(request.params.id)
     if(blog){
@@ -22,19 +22,23 @@ blogsRouter.get('/:id', async (request, response, next) => {
 })
 
 // POST blog
-blogsRouter.post('/', async (request, response, next) => {
+blogsRouter.post('/', userExtractor, async (request, response, next) => {
     try{
         const body = request.body
-        if (!body.title || !body.url) {
-            return response.status(400).json({ error: 'title and url are required' })
+        const user = request.user
+        if (!user) {
+            return response.status(400).json({ error: 'userId missing or not valid' })
           }      
         const blog = new Blog({
             title: body.title,
             author: body.author,
             url: body.url,
             likes: body.likes || 0,
+            user: user._id
         })
         const savedBlog = await blog.save()
+        user.blogs = user.blogs.concat(savedBlog._id)
+        await user.save()
         response.status(201).json(savedBlog)
     }catch(error){
         next(error)
@@ -42,9 +46,20 @@ blogsRouter.post('/', async (request, response, next) => {
 })
 
 //DELETE blog
-blogsRouter.delete('/:id', async (request, response) => {
-    await Blog.findByIdAndDelete(request.params.id)
-    response.status(204).end()
+blogsRouter.delete('/:id', userExtractor, async (request, response, next) => {
+    try{
+      const blog = await Blog.findById(request.params.id)
+      if(!blog){
+        return response.status(404).json({ error: 'no existing'})
+      }
+      if(blog.user.toString() !== request.user.id.toString()){
+        return response.status(403).json({ error: 'only the creator can delete this blog'})
+      }
+      await blog.deleteOne()
+      response.status(204).end()
+  }catch(error){
+    next(error)
+  }
 })
 
 //UPDATE blog likes
