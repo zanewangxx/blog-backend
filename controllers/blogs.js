@@ -3,12 +3,12 @@ const Blog = require('../models/blog')
 const { userExtractor } = require('../utils/middleware')
 
 // GET blogs
-blogsRouter.get('/', userExtractor, async (request, response) => {
+blogsRouter.get('/', async (request, response) => {
     const blogs = await Blog.find({}).populate('user', {username: 1, name: 1, id: 1})
     response.json(blogs)
 })
 
-blogsRouter.get('/:id', userExtractor, async (request, response, next) => {
+blogsRouter.get('/:id', async (request, response, next) => {
     try{
     const blog = await Blog.findById(request.params.id)
     if(blog){
